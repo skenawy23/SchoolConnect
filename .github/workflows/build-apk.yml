@@ -11,36 +11,59 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      # 1. Download repository files
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2. Setup Java
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
+      # 3. Setup Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools'
 
+      # 4. Install Android SDK packages
       - name: Install SDK packages
         run: |
           yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
+      # 5. Setup Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
 
+      # 6. Find Android project directory
+      - name: Find Android Project
+        run: |
+          SETTINGS_FILE=$(find . \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -type f -print -quit)
+
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "ERROR: Android Gradle project not found!"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
+          echo "Android project found in: $PROJECT_DIR"
+
+          echo "PROJECT_DIR=$GITHUB_WORKSPACE/$PROJECT_DIR" >> $GITHUB_ENV
+
+      # 7. Build APK
       - name: Build APK
         run: gradle assembleDebug --no-daemon
+        working-directory: ${{ env.PROJECT_DIR }}
 
+      # 8. Upload generated APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SchoolConnect-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
